@@ -16,9 +16,11 @@ users = {}
 
 
 def get_word_ending(n, is_verb=False):
-    if n % 10 == 1 and n % 10 != 1:
+    if n % 10 == 1 and n // 10 != 1:
         return "а"
-    elif 5 > n % 10 > 0 and n % 10 != 1:
+    elif 5 > n % 10 > 0 and n // 10 != 1:
+        if is_verb:
+            return "о"
         return "ы"
     else:
         if is_verb:
@@ -33,7 +35,7 @@ def get_answer_embed(user_id):
     length = users[user_id]["length"]
     answer_embed.set_footer(text="{0} слов(а), сгеннерированн{1} {2} фраз{3}"
                             .format(length,
-                                    get_word_ending(length),
+                                    get_word_ending(phrase_counter, True),
                                     phrase_counter,
                                     get_word_ending(phrase_counter)))
     answer_embed.colour = discord.Color.blue()
@@ -68,6 +70,7 @@ async def on_message(msg: discord.Message):
         reply_msg: discord.Message = await msg.channel.send(embed=get_answer_embed(msg.author.id))
         users[msg.author.id]["msg"] = reply_msg
         await reply_msg.add_reaction("🔄")
+        await reply_msg.add_reaction("➕")
     elif gen_words_pattern.parse(usr_msg):
         length, phrase_begin = gen_words_pattern.dict().values()
         data = await get_phrase(phrase_begin, length)
@@ -83,7 +86,7 @@ async def on_message(msg: discord.Message):
         reply_msg: discord.Message = await msg.channel.send(embed=get_answer_embed(msg.author.id))
         users[msg.author.id]["msg"] = reply_msg
         await reply_msg.add_reaction("🔄")
-
+        await reply_msg.add_reaction("➕")
 
 @client.event
 async def on_raw_reaction_add(reaction_raw: discord.RawReactionActionEvent):
@@ -99,6 +102,11 @@ async def handle_emoji_click(reaction_raw):
     if reaction_raw.user_id in users:
         if users[reaction_raw.user_id]["msg"].id == reaction_raw.message_id:
             if str(reaction_raw.emoji) == "🔄":
+                await update_reply(reaction_raw.user_id)
+            elif str(reaction_raw.emoji) == "➕":
+                users[reaction_raw.user_id]["length"] += 5
+                users[reaction_raw.user_id]["phrases_counter"] = 0
+                users[reaction_raw.user_id]["reply_index"] = 2
                 await update_reply(reaction_raw.user_id)
 
 
