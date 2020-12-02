@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 from os import getenv
@@ -11,8 +12,9 @@ TOKEN = getenv("DISCORD_TOKEN")
 client = discord.Client()
 gen_pattern = Pattern("+gen <start: str>")
 gen_words_pattern = Pattern("+gen<quantity: int> <start: str>")
-
 users = {}
+
+
 
 
 def get_word_ending(n, is_verb=False):
@@ -49,6 +51,7 @@ def get_answer_embed(user_id):
 async def on_ready():
     logging.log(logging.INFO, "Bot started!")
     print('bot started!')
+    await client.change_presence(activity=discord.Game(name='+gen[кол-во слов] <фраза>'))
 
 
 @client.event
@@ -71,6 +74,7 @@ async def on_message(msg: discord.Message):
         users[msg.author.id]["msg"] = reply_msg
         await reply_msg.add_reaction("🔄")
         await reply_msg.add_reaction("➕")
+        await reply_msg.add_reaction("❄")
     elif gen_words_pattern.parse(usr_msg):
         length, phrase_begin = gen_words_pattern.dict().values()
         data = await get_phrase(phrase_begin, length)
@@ -87,6 +91,8 @@ async def on_message(msg: discord.Message):
         users[msg.author.id]["msg"] = reply_msg
         await reply_msg.add_reaction("🔄")
         await reply_msg.add_reaction("➕")
+        await reply_msg.add_reaction("❄")
+
 
 @client.event
 async def on_raw_reaction_add(reaction_raw: discord.RawReactionActionEvent):
@@ -108,6 +114,17 @@ async def handle_emoji_click(reaction_raw):
                 users[reaction_raw.user_id]["phrases_counter"] = 0
                 users[reaction_raw.user_id]["reply_index"] = 2
                 await update_reply(reaction_raw.user_id)
+            elif str(reaction_raw.emoji) == "❄":
+                user = await client.fetch_user(reaction_raw.user_id)
+                msg = users[reaction_raw.user_id]["msg"]
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(await get_postcard(reaction_raw.user_id), headers={"User-agent": ""}) as resp:
+                        if resp.status != 200:
+                            return await msg.channel.send('Could not download file...')
+                        data = io.BytesIO(await resp.read())
+                        await msg.channel.send(user.mention, file=discord.File(data, 'cool_image.png'))
+                await users[reaction_raw.user_id]["msg"].delete()
+                del users[reaction_raw.user_id]
 
 
 async def update_reply(user_id):
@@ -135,6 +152,20 @@ async def get_phrase(begin, words_quantity=30):
     data = json.loads(await request.text())
     await session.close()
     return data
+
+
+async def get_postcard(user_id):
+    session = aiohttp.ClientSession()
+    content = [[users[user_id]["phrase_begin"], 0], [users[user_id]["replies"][users[user_id]["reply_index"]], 1],
+               ["\n", 0]]
+    request = await session.post("https://porfirevich.ru/api/story",
+                                 json={"content": json.dumps(content, ensure_ascii=False)}, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 RuxitSynthetic"
+                          "/1.0 v2820781040184328804 t4157550440124640339"})
+    answer = json.loads(await request.text())
+    await session.close()
+    return "https://porfirevich.ru/" + answer["postcard"]
 
 
 client.run(TOKEN)
