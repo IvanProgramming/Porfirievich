@@ -44,7 +44,7 @@ virtualenv venv
 ```
 5. *Optional*. Activate virtual enviroment
 ```bash
-source venv\Scripts\activate
+source venv\bin\activate
 ```
 6. Install all requirements
 ```bash
